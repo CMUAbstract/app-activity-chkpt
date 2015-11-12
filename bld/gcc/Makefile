@@ -13,10 +13,6 @@ include $(MAKER_ROOT)/Makefile.board
 include $(MAKER_ROOT)/Makefile.console
 include $(MAKER_ROOT)/Makefile.edb
 
-ifeq ($(CONT_POWER),1)
-CFLAGS += -DCONT_POWER
-endif
-
 CFLAGS += \
 	-I$(LIBMSP_ROOT)/src/include \
 	-I$(LIBMSPBUILTINS_ROOT)/src/include \
