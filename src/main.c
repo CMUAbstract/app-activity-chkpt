@@ -395,6 +395,8 @@ void train(features_t *classModel)
 
         classModel[i] = features;
     }
+
+    PRINTF("train: done\r\n");
 }
 
 void recognize(model_t *model)
