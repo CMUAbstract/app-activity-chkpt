@@ -374,8 +374,8 @@ void recognize(model_t *model)
 {
     accelWindow sampleWindow;
     features_t features;
-    stats_t stats;
     class_t class;
+    stats_t stats = {0};
     unsigned i;
 
     for (i = 0; i < SAMPLES_TO_COLLECT; ++i) {
