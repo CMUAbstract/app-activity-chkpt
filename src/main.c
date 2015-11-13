@@ -260,7 +260,7 @@ class_t classify(features_t *features, model_t *model)
             ? (model_features->stddevmag - features->stddevmag)
             : (features->stddevmag - model_features->stddevmag);
 
-        model_features = &model->stationary[i];
+        model_features = &model->moving[i];
 
         long int move_mean_err = (model_features->meanmag > features->meanmag)
             ? (model_features->meanmag - features->meanmag)
