@@ -403,11 +403,19 @@ void train(features_t *classModel)
 
 void recognize(model_t *model)
 {
+#ifdef MEMENTOS_NONVOLATILE
+    static __nv stats_t stats;
+#else
+    stats_t stats;
+#endif
     accelWindow sampleWindow;
     features_t features;
     class_t class;
-    stats_t stats = {0};
     unsigned i;
+
+    stats.totalCount = 0;
+    stats.stationaryCount = 0;
+    stats.movingCount = 0;
 
     for (i = 0; i < SAMPLES_TO_COLLECT; ++i) {
         acquire_window(sampleWindow);
@@ -507,8 +515,13 @@ int main()
 {
     // "Globals" must be on the stack because Mementos doesn't handle real
     // globals correctly
-    model_t model;
     uint8_t prev_pin_state = MODE_IDLE;
+
+#ifdef MEMENTOS_NONVOLATILE
+    static __nv model_t model;
+#else
+    model_t model;
+#endif
 
 #ifndef MEMENTOS
     init();
