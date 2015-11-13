@@ -396,7 +396,8 @@ void train(features_t *classModel)
         classModel[i] = features;
     }
 
-    PRINTF("train: done\r\n");
+    PRINTF("train: done: mn %u sd %u\r\n",
+           features.meanmag, features.stddevmag);
 }
 
 void recognize(model_t *model)
