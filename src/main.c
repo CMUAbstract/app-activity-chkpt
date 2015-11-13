@@ -83,7 +83,7 @@ static __nv unsigned curtask;
 #define SAMPLE_NOISE_FLOOR 10 // TODO: made up value
 
 // Number of classifications to complete in one experiment
-#define SAMPLES_TO_COLLECT 32
+#define SAMPLES_TO_COLLECT 128
 
 #define SEC_TO_CYCLES 4000000 /* 4 MHz */
 
