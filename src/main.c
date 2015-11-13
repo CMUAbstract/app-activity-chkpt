@@ -4,11 +4,11 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 
 #include <libmsp/mem.h>
 #include <libio/log.h>
 #include <msp-builtins.h>
+#include <msp-math.h>
 
 #ifdef CONFIG_EDB
 #include <libedb/edb.h>
@@ -249,16 +249,11 @@ void featurize(features_t *features, accelWindow aWin)
     stddev.y >>= 2;
     stddev.z >>= 2;
 
-    float meanmag_f = (float)
-        ((mean.x*mean.x) + (mean.y*mean.y) + (mean.z*mean.z));
-    float stddevmag_f = (float)
-        ((stddev.x*stddev.x) + (stddev.y*stddev.y) + (stddev.z*stddev.z));
+    unsigned meanmag = mean.x*mean.x + mean.y*mean.y + mean.z*mean.z;
+    unsigned stddevmag = stddev.x*stddev.x + stddev.y*stddev.y + stddev.z*stddev.z;
 
-    meanmag_f   = sqrtf(meanmag_f);
-    stddevmag_f = sqrtf(stddevmag_f);
-
-    features->meanmag   = (long)meanmag_f;
-    features->stddevmag = (long)stddevmag_f;
+    features->meanmag   = sqrt16(meanmag);
+    features->stddevmag = sqrt16(stddevmag);
 
     LOG("featurize: mean %u sd %u\r\n", features->meanmag, features->stddevmag);
 }

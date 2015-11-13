@@ -16,9 +16,13 @@ include $(MAKER_ROOT)/Makefile.edb
 CFLAGS += \
 	-I$(LIBMSP_ROOT)/src/include \
 	-I$(LIBMSPBUILTINS_ROOT)/src/include \
+	-I$(LIBMSPMATH_ROOT)/src/include \
 	-I$(LIBIO_ROOT)/src/include \
 
+LFLAGS += \
+	-L$(LIBMSPMATH_ROOT)/bld/gcc \
+
 LIBS += \
-	-lm
+	-lmspmath \
 
 VPATH = ../../src
