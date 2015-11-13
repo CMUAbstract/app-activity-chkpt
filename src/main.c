@@ -343,10 +343,8 @@ void record_stats(stats_t *stats, class_t class)
 
 void print_stats(stats_t *stats)
 {
-    unsigned resultStationaryPct =
-        ((float)stats->stationaryCount / (float)stats->totalCount) * 100.0f;
-    unsigned resultMovingPct =
-        ((float)stats->movingCount / (float)stats->totalCount) * 100.0f;
+    unsigned resultStationaryPct = stats->stationaryCount * 100 / stats->totalCount;
+    unsigned resultMovingPct = stats->movingCount * 100 / stats->totalCount;
 
     unsigned sum = stats->stationaryCount + stats->movingCount;
 
