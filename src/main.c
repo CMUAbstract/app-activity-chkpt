@@ -185,6 +185,29 @@ void acquire_window(accelWindow window)
     }
 }
 
+void transform(accelWindow window)
+{
+    unsigned i = 0;
+
+    LOG("transform\r\n");
+
+    for (i = 0; i < ACCEL_WINDOW_SIZE; i++) {
+        accelReading *sample = &window[i];
+
+        if (sample->x < SAMPLE_NOISE_FLOOR ||
+            sample->y < SAMPLE_NOISE_FLOOR ||
+            sample->z < SAMPLE_NOISE_FLOOR) {
+
+            LOG("transform: sample %u %u %u\r\n",
+                sample->x, sample->y, sample->z);
+
+            sample->x = (sample->x > SAMPLE_NOISE_FLOOR) ? sample->x : 0;
+            sample->y = (sample->y > SAMPLE_NOISE_FLOOR) ? sample->y : 0;
+            sample->z = (sample->z > SAMPLE_NOISE_FLOOR) ? sample->z : 0;
+        }
+    }
+}
+
 void featurize(features_t *features, accelWindow aWin)
 {
     TASK_BOUNDARY(TASK_FEATURIZE);
@@ -362,6 +385,7 @@ void train(features_t *classModel)
 
     for (i = 0; i < MODEL_SIZE; ++i) {
         acquire_window(sampleWindow);
+        transform(sampleWindow);
         featurize(&features, sampleWindow);
 
         TASK_BOUNDARY(TASK_TRAIN);
@@ -380,6 +404,7 @@ void recognize(model_t *model)
 
     for (i = 0; i < SAMPLES_TO_COLLECT; ++i) {
         acquire_window(sampleWindow);
+        transform(sampleWindow);
         featurize(&features, sampleWindow);
         class = classify(&features, model);
         record_stats(&stats, class);
