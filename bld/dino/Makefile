@@ -3,6 +3,11 @@ EXEC = ar.out
 OBJECTS = \
 	main.o \
 
+BOARD = wisp
+CONFIG_EDB = 1
+CONFIG_PRINTF_LIB = libedb
+CONFIG_LIBEDB_PRINTF = eif
+
 include $(MAKER_ROOT)/Makefile.dino
 include $(MAKER_ROOT)/Makefile.board
 include $(MAKER_ROOT)/Makefile.console
