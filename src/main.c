@@ -361,7 +361,8 @@ void print_stats(stats_t *stats)
     PRINTF("stats: s %u (%u%%) m %u (%u%%) sum/tot %u/%u: %c\r\n",
            stats->stationaryCount, resultStationaryPct,
            stats->movingCount, resultMovingPct,
-           stats->totalCount, sum, sum == stats->totalCount ? 'V' : 'X');
+           stats->totalCount, sum,
+           sum == stats->totalCount && sum == SAMPLES_TO_COLLECT ? 'V' : 'X');
 }
 
 void warmup_sensor()
