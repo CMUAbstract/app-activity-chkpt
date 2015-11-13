@@ -162,6 +162,24 @@ static void blink(unsigned count, uint32_t duration, unsigned leds)
 }
 #endif
 
+// Can't call GCC code from Clang due to different calling convention, but must
+// compile wisp-base with GCC for libedb to work. For now, wrap-hack.
+#ifdef __clang__
+void accel_sample(accelReading *sample)
+{
+    __asm__ volatile (
+        "mov %[p], r12\n"
+        "call %[f]\n"
+        :
+        : [f] "i" (ACCEL_singleSample),
+          [p] "r" (sample)
+        : "r12"
+    );
+}
+#else
+#define accel_sample ACCEL_singleSample
+#endif
+
 void acquire_window(accelWindow window)
 {
     accelReading sample;
@@ -170,7 +188,7 @@ void acquire_window(accelWindow window)
     TASK_BOUNDARY(TASK_SAMPLE);
 
     while (samplesInWindow < ACCEL_WINDOW_SIZE) {
-        ACCEL_singleSample(&sample);
+        accel_sample(&sample);
         LOG("acquire: sample %u %u %u\r\n", sample.x, sample.y, sample.z);
 
         window[samplesInWindow++] = sample;
@@ -356,7 +374,7 @@ void warmup_sensor()
     LOG("warmup\r\n");
 
     while (discardedSamplesCount++ < NUM_WARMUP_SAMPLES) {
-        ACCEL_singleSample(&sample);
+        accel_sample(&sample);
     }
 }
 
