@@ -186,6 +186,7 @@ void acquire_window(accelWindow window)
     unsigned samplesInWindow = 0;
 
     TASK_BOUNDARY(TASK_SAMPLE);
+    DINO_RESTORE_NONE();
 
     while (samplesInWindow < ACCEL_WINDOW_SIZE) {
         accel_sample(&sample);
@@ -221,6 +222,7 @@ void transform(accelWindow window)
 void featurize(features_t *features, accelWindow aWin)
 {
     TASK_BOUNDARY(TASK_FEATURIZE);
+    DINO_RESTORE_NONE();
 
     accelReading mean;
     accelReading stddev;
@@ -276,6 +278,7 @@ class_t classify(features_t *features, model_t *model)
     int i;
 
     TASK_BOUNDARY(TASK_CLASSIFY);
+    DINO_RESTORE_NONE();
 
     for (i = 0; i < MODEL_SIZE; ++i) {
         model_features = &model->stationary[i];
@@ -320,7 +323,9 @@ class_t classify(features_t *features, model_t *model)
 
 void record_stats(stats_t *stats, class_t class)
 {
+    DINO_VERSION_VAL(stats_t, *stats, stats);
     TASK_BOUNDARY(TASK_RECORD_STATS);
+    DINO_RESTORE_VAL(*stats, stats);
 
     /* stats->totalCount, stats->movingCount, and stats->stationaryCount have an
      * nv-internal consistency requirement.  This code should be atomic. */
@@ -371,6 +376,7 @@ void warmup_sensor()
     accelReading sample;
 
     TASK_BOUNDARY(TASK_WARMUP);
+    DINO_RESTORE_NONE();
 
     LOG("warmup\r\n");
 
@@ -393,6 +399,7 @@ void train(features_t *classModel)
         featurize(&features, sampleWindow);
 
         TASK_BOUNDARY(TASK_TRAIN);
+        DINO_RESTORE_NONE();
 
         classModel[i] = features;
     }
@@ -433,6 +440,7 @@ run_mode_t select_mode(uint8_t *prev_pin_state)
     uint8_t pin_state;
 
     TASK_BOUNDARY(TASK_SELECT_MODE);
+    DINO_RESTORE_NONE();
 
     pin_state = GPIO(PORT_AUX, IN) & (BIT(PIN_AUX_1) | BIT(PIN_AUX_2));
 
