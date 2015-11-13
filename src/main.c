@@ -419,13 +419,22 @@ void recognize(model_t *model)
     print_stats(&stats);
 }
 
-run_mode_t select_mode()
+run_mode_t select_mode(uint8_t *prev_pin_state)
 {
     uint8_t pin_state;
 
     TASK_BOUNDARY(TASK_SELECT_MODE);
 
     pin_state = GPIO(PORT_AUX, IN) & (BIT(PIN_AUX_1) | BIT(PIN_AUX_2));
+
+    // Don't re-launch training after finishing training
+    if ((pin_state == MODE_TRAIN_STATIONARY ||
+        pin_state == MODE_TRAIN_MOVING) &&
+        pin_state == *prev_pin_state) {
+        pin_state = MODE_IDLE;
+    } else {
+        *prev_pin_state = pin_state;
+    }
 
     LOG("selectMode: pins %04x\r\n", pin_state);
 
@@ -495,7 +504,10 @@ void init()
 
 int main()
 {
+    // "Globals" must be on the stack because Mementos doesn't handle real
+    // globals correctly
     model_t model;
+    uint8_t prev_pin_state = MODE_IDLE;
 
 #ifndef MEMENTOS
     init();
@@ -505,7 +517,7 @@ int main()
 
     while (1)
     {
-        run_mode_t mode = select_mode();
+        run_mode_t mode = select_mode(&prev_pin_state);
         switch (mode) {
             case MODE_TRAIN_STATIONARY:
                 LOG("mode: stationary\r\n");
