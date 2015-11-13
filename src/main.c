@@ -146,14 +146,16 @@ void __delay_cycles(unsigned long cyc) {
 }
 #endif
 
-#if defined(SHOW_RESULT_ON_LEDS) || defined(SHOW_PROGRESS_ON_LEDS)
+#if defined(CONT_POWER) || defined(SHOW_RESULT_ON_LEDS) || defined(SHOW_PROGRESS_ON_LEDS)
 static void delay(uint32_t cycles)
 {
     unsigned i;
     for (i = 0; i < cycles / (1U << 15); ++i)
         __delay_cycles(1U << 15);
 }
+#endif
 
+#if defined(SHOW_RESULT_ON_LEDS) || defined(SHOW_PROGRESS_ON_LEDS)
 static void blink(unsigned count, uint32_t duration, unsigned leds)
 {
     unsigned i;
@@ -487,12 +489,12 @@ int main()
                 recognize(&model);
                 break;
             default:
-#ifdef CONT_POWER
-                volatile uint32_t delay = 0x8ffff;
-                while (delay--);
-#endif // CONT_POWER
+                LOG("mode: idle\r\n");
                 break;
         }
+#ifdef CONT_POWER
+        delay(SEC_TO_CYCLES * 4);
+#endif // CONT_POWER
     }
 
     return 0;
