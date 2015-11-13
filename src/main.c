@@ -138,14 +138,6 @@ typedef struct {
     unsigned stationaryCount;
 } stats_t;
 
-#ifdef __clang__
-void __delay_cycles(unsigned long cyc) {
-  unsigned i;
-  for (i = 0; i < (cyc >> 3); ++i)
-    ;
-}
-#endif
-
 #if defined(CONT_POWER) || defined(SHOW_RESULT_ON_LEDS) || defined(SHOW_PROGRESS_ON_LEDS)
 static void delay(uint32_t cycles)
 {
