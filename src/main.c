@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 #include <libmsp/mem.h>
 #include <libio/log.h>
@@ -22,17 +23,26 @@
 
 #include "pins.h"
 
+#define USE_LEDS
+
 static __nv unsigned curtask;
 
 /* This is for progress reporting only */
 #define SET_CURTASK(t) curtask = t
 
 #define TASK_MAIN                   1
+#define TASK_SELECT_MODE            2
+#define TASK_WARMUP                 3
+#define TASK_TRAIN                  4
+#define TASK_SAMPLE                 5
+#define TASK_FEATURIZE              6
+#define TASK_CLASSIFY               7
+#define TASK_RECORD_STATS           8
 
 #ifdef DINO
 
-#define TASK_BOUNDARY(t, x) \
-        DINO_TASK_BOUNDARY_MANUAL(x); \
+#define TASK_BOUNDARY(t) \
+        DINO_TASK_BOUNDARY_MANUAL(NULL); \
         SET_CURTASK(t); \
 
 #define DINO_RESTORE_NONE() \
@@ -51,7 +61,7 @@ static __nv unsigned curtask;
 
 #else // !DINO
 
-#define TASK_BOUNDARY(t, x) SET_CURTASK(t)
+#define TASK_BOUNDARY(t) SET_CURTASK(t)
 
 #define DINO_RESTORE_CHECK()
 #define DINO_VERSION_PTR(...)
@@ -64,6 +74,364 @@ static __nv unsigned curtask;
 #define DINO_REVERT_VAL(...)
 
 #endif // !DINO
+
+// Number of samples to discard before recording training set
+#define NUM_WARMUP_SAMPLES 3
+
+#define ACCEL_WINDOW_SIZE 3
+#define MODEL_SIZE 32
+#define SAMPLE_NOISE_FLOOR 10 // TODO: made up value
+
+// Number of classifications to complete in one experiment
+#define SAMPLES_TO_COLLECT 512
+
+#define SEC_TO_CYCLES 4000000 /* 4 MHz */
+
+#define IDLE_WAIT SEC_TO_CYCLES
+
+#define IDLE_BLINKS 1
+#define IDLE_BLINK_DURATION SEC_TO_CYCLES
+#define SELECT_MODE_BLINKS  4
+#define SELECT_MODE_BLINK_DURATION  (SEC_TO_CYCLES / 5)
+#define SAMPLE_BLINKS  1
+#define SAMPLE_BLINK_DURATION  (SEC_TO_CYCLES * 2)
+#define FEATURIZE_BLINKS  2
+#define FEATURIZE_BLINK_DURATION  (SEC_TO_CYCLES * 2)
+#define CLASSIFY_BLINKS 1
+#define CLASSIFY_BLINK_DURATION (SEC_TO_CYCLES * 4)
+#define WARMUP_BLINKS 2
+#define WARMUP_BLINK_DURATION (SEC_TO_CYCLES / 2)
+#define TRAIN_BLINKS 1
+#define TRAIN_BLINK_DURATION (SEC_TO_CYCLES * 4)
+
+#define LED1 (1 << 0)
+#define LED2 (1 << 1)
+
+typedef threeAxis_t_8 accelReading;
+typedef accelReading accelWindow[ACCEL_WINDOW_SIZE];
+
+typedef struct {
+    unsigned meanmag;
+    unsigned stddevmag;
+} features_t;
+
+typedef enum {
+    CLASS_STATIONARY,
+    CLASS_MOVING,
+} class_t;
+
+typedef struct {
+    features_t stationary[MODEL_SIZE];
+    features_t moving[MODEL_SIZE];
+} model_t;
+
+typedef enum {
+    MODE_IDLE = (BIT(PIN_AUX_1) | BIT(PIN_AUX_2)),
+    MODE_TRAIN_STATIONARY = BIT(PIN_AUX_1),
+    MODE_TRAIN_MOVING = BIT(PIN_AUX_2),
+    MODE_RECOGNIZE = 0, // default
+} run_mode_t;
+
+typedef struct {
+    unsigned totalCount;
+    unsigned movingCount;
+    unsigned stationaryCount;
+} stats_t;
+
+#ifdef __clang__
+void __delay_cycles(unsigned long cyc) {
+  unsigned i;
+  for (i = 0; i < (cyc >> 3); ++i)
+    ;
+}
+#endif
+
+#if defined(SHOW_RESULT_ON_LEDS) || defined(SHOW_PROGRESS_ON_LEDS)
+static void delay(uint32_t cycles)
+{
+    unsigned i;
+    for (i = 0; i < cycles / (1U << 15); ++i)
+        __delay_cycles(1U << 15);
+}
+
+static void blink(unsigned count, uint32_t duration, unsigned leds)
+{
+    unsigned i;
+    for (i = 0; i < count; ++i) {
+        GPIO(PORT_LED_1, OUT) |= (leds & LED1) ? BIT(PIN_LED_1) : 0x0;
+        GPIO(PORT_LED_2, OUT) |= (leds & LED2) ? BIT(PIN_LED_2) : 0x0;
+        delay(duration / 2);
+        GPIO(PORT_LED_1, OUT) &= (leds & LED1) ? ~BIT(PIN_LED_1) : ~0x0;
+        GPIO(PORT_LED_2, OUT) &= (leds & LED2) ? ~BIT(PIN_LED_2) : ~0x0;
+        delay(duration / 2);
+    }
+}
+#endif
+
+void acquire_window(accelWindow window)
+{
+    accelReading sample;
+    unsigned samplesInWindow = 0;
+
+    TASK_BOUNDARY(TASK_SAMPLE);
+
+    while (samplesInWindow < ACCEL_WINDOW_SIZE) {
+        ACCEL_singleSample(&sample);
+        LOG("acquire: sample %u %u %u\r\n", sample.x, sample.y, sample.z);
+
+        window[samplesInWindow++] = sample;
+    }
+}
+
+void featurize(features_t *features, accelWindow aWin)
+{
+    TASK_BOUNDARY(TASK_FEATURIZE);
+
+    accelReading mean;
+    accelReading stddev;
+
+    mean.x = mean.y = mean.z = 0;
+    stddev.x = stddev.y = stddev.z = 0;
+    int i;
+    for (i = 0; i < ACCEL_WINDOW_SIZE; i++) {
+        mean.x += aWin[i].x;  // x
+        mean.y += aWin[i].y;  // y
+        mean.z += aWin[i].z;  // z
+    }
+    /*
+       mean.x = mean.x / ACCEL_WINDOW_SIZE;
+       mean.y = mean.y / ACCEL_WINDOW_SIZE;
+       mean.z = mean.z / ACCEL_WINDOW_SIZE;
+       */
+    mean.x >>= 2;
+    mean.y >>= 2;
+    mean.z >>= 2;
+
+    for (i = 0; i < ACCEL_WINDOW_SIZE; i++) {
+        stddev.x += aWin[i].x > mean.x ? aWin[i].x - mean.x
+            : mean.x - aWin[i].x;  // x
+        stddev.y += aWin[i].y > mean.y ? aWin[i].y - mean.y
+            : mean.y - aWin[i].y;  // y
+        stddev.z += aWin[i].z > mean.z ? aWin[i].z - mean.z
+            : mean.z - aWin[i].z;  // z
+    }
+    /*
+       stddev.x = stddev.x / (ACCEL_WINDOW_SIZE - 1);
+       stddev.y = stddev.y / (ACCEL_WINDOW_SIZE - 1);
+       stddev.z = stddev.z / (ACCEL_WINDOW_SIZE - 1);
+       */
+    stddev.x >>= 2;
+    stddev.y >>= 2;
+    stddev.z >>= 2;
+
+    float meanmag_f = (float)
+        ((mean.x*mean.x) + (mean.y*mean.y) + (mean.z*mean.z));
+    float stddevmag_f = (float)
+        ((stddev.x*stddev.x) + (stddev.y*stddev.y) + (stddev.z*stddev.z));
+
+    meanmag_f   = sqrtf(meanmag_f);
+    stddevmag_f = sqrtf(stddevmag_f);
+
+    features->meanmag   = (long)meanmag_f;
+    features->stddevmag = (long)stddevmag_f;
+
+    LOG("featurize: mean %u sd %u\r\n", features->meanmag, features->stddevmag);
+}
+
+class_t classify(features_t *features, model_t *model)
+{
+    int move_less_error = 0;
+    int stat_less_error = 0;
+    features_t *model_features;
+    int i;
+
+    TASK_BOUNDARY(TASK_CLASSIFY);
+
+    for (i = 0; i < MODEL_SIZE; ++i) {
+        model_features = &model->stationary[i];
+
+        long int stat_mean_err = (model_features->meanmag > features->meanmag)
+            ? (model_features->meanmag - features->meanmag)
+            : (features->meanmag - model_features->meanmag);
+
+        long int stat_sd_err = (model_features->stddevmag > features->stddevmag)
+            ? (model_features->stddevmag - features->stddevmag)
+            : (features->stddevmag - model_features->stddevmag);
+
+        model_features = &model->stationary[i];
+
+        long int move_mean_err = (model_features->meanmag > features->meanmag)
+            ? (model_features->meanmag - features->meanmag)
+            : (features->meanmag - model_features->meanmag);
+
+        long int move_sd_err = (model_features->stddevmag > features->stddevmag)
+            ? (model_features->stddevmag - features->stddevmag)
+            : (features->stddevmag - model_features->stddevmag);
+
+        if (move_mean_err < stat_mean_err) {
+            move_less_error++;
+        } else {
+            stat_less_error++;
+        }
+
+        if (move_sd_err < stat_sd_err) {
+            move_less_error++;
+        } else {
+            stat_less_error++;
+        }
+    }
+
+    class_t class = move_less_error > stat_less_error ?
+                        CLASS_MOVING : CLASS_STATIONARY;
+    LOG("classify: class %u\r\n", class);
+
+    return class;
+}
+
+void record_stats(stats_t *stats, class_t class)
+{
+    TASK_BOUNDARY(TASK_RECORD_STATS);
+
+    /* stats->totalCount, stats->movingCount, and stats->stationaryCount have an
+     * nv-internal consistency requirement.  This code should be atomic. */
+
+    stats->totalCount++;
+
+    switch (class) {
+        case CLASS_MOVING:
+
+#if defined(SHOW_RESULT_ON_LEDS)
+            blink(CLASSIFY_BLINKS, CLASSIFY_BLINK_DURATION, LED1);
+#endif //SHOW_RESULT_ON_LEDS
+
+            stats->movingCount++;
+            break;
+
+        case CLASS_STATIONARY:
+
+#if defined(SHOW_RESULT_ON_LEDS)
+            blink(CLASSIFY_BLINKS, CLASSIFY_BLINK_DURATION, LED2);
+#endif //SHOW_RESULT_ON_LEDS
+
+            stats->stationaryCount++;
+            break;
+    }
+
+    LOG("stats: s %u m %u t %u\r\n",
+        stats->stationaryCount, stats->movingCount, stats->totalCount);
+}
+
+void print_stats(stats_t *stats)
+{
+    unsigned resultStationaryPct =
+        ((float)stats->stationaryCount / (float)stats->totalCount) * 100.0f;
+    unsigned resultMovingPct =
+        ((float)stats->movingCount / (float)stats->totalCount) * 100.0f;
+
+    unsigned sum = stats->stationaryCount + stats->movingCount;
+
+    PRINTF("stats: s %u (%u%%) m %u (%u%%) sum/tot %u/%u: %c\r\n",
+           stats->stationaryCount, resultStationaryPct,
+           stats->movingCount, resultMovingPct,
+           stats->totalCount, sum, sum == stats->totalCount ? 'V' : 'X');
+}
+
+void warmup_sensor()
+{
+    unsigned discardedSamplesCount = 0;
+    accelReading sample;
+
+    TASK_BOUNDARY(TASK_WARMUP);
+
+    LOG("warmup\r\n");
+
+    while (discardedSamplesCount++ < NUM_WARMUP_SAMPLES) {
+        ACCEL_singleSample(&sample);
+    }
+}
+
+void train(features_t *classModel)
+{
+    accelWindow sampleWindow;
+    features_t features;
+    unsigned i;
+
+    warmup_sensor();
+
+    for (i = 0; i < MODEL_SIZE; ++i) {
+        acquire_window(sampleWindow);
+        featurize(&features, sampleWindow);
+
+        TASK_BOUNDARY(TASK_TRAIN);
+
+        classModel[i] = features;
+    }
+}
+
+void recognize(model_t *model)
+{
+    accelWindow sampleWindow;
+    features_t features;
+    stats_t stats;
+    class_t class;
+    unsigned i;
+
+    for (i = 0; i < SAMPLES_TO_COLLECT; ++i) {
+        acquire_window(sampleWindow);
+        featurize(&features, sampleWindow);
+        class = classify(&features, model);
+        record_stats(&stats, class);
+    }
+
+    print_stats(&stats);
+}
+
+run_mode_t select_mode()
+{
+    uint8_t pin_state;
+
+    TASK_BOUNDARY(TASK_SELECT_MODE);
+
+    pin_state = GPIO(PORT_AUX, IN) & (BIT(PIN_AUX_1) | BIT(PIN_AUX_2));
+
+    LOG("selectMode: pins %04x\r\n", pin_state);
+
+    return (run_mode_t)pin_state;
+}
+
+static void init_accel()
+{
+    threeAxis_t_8 accelID = {0};
+
+    LOG("init: initializing accel\r\n");
+
+    // AUX pins select run mode: configure as inputs with pull-ups
+    GPIO(PORT_AUX, DIR) &= ~(BIT(PIN_AUX_1) | BIT(PIN_AUX_2));
+    GPIO(PORT_AUX, OUT) &= ~(BIT(PIN_AUX_1) | BIT(PIN_AUX_2)); // pull-down
+    GPIO(PORT_AUX, REN) |= BIT(PIN_AUX_1) | BIT(PIN_AUX_2);
+
+    /*
+    SPI_initialize();
+    ACCEL_initialize();
+    */
+    // ACCEL_SetReg(0x2D,0x02);
+
+    /* TODO: move the below stuff to accel.c */
+    BITSET(P4OUT, PIN_ACCEL_EN);
+
+    BITSET(P2SEL1, PIN_ACCEL_SCLK | PIN_ACCEL_MISO | PIN_ACCEL_MOSI);
+    BITCLR(P2SEL0, PIN_ACCEL_SCLK | PIN_ACCEL_MISO | PIN_ACCEL_MOSI);
+    __delay_cycles(1000);
+    SPI_initialize();
+    __delay_cycles(1000);
+    ACCEL_range();
+    __delay_cycles(1000);
+    ACCEL_initialize();
+    __delay_cycles(1000);
+    ACCEL_readID(&accelID);
+
+    LOG("init: accel hw id: 0x%x\r\n", accelID.x);
+}
 
 void init()
 {
@@ -87,11 +455,15 @@ void init()
     GPIO(PORT_LED_3, OUT) |= BIT(PIN_LED_3);
 #endif
 
-    EIF_PRINTF(".%u.\r\n", curtask);
+    init_accel();
+
+    PRINTF(".%u.\r\n", curtask);
 }
 
 int main()
 {
+    model_t model;
+
 #ifndef MEMENTOS
     init();
 #endif
@@ -100,15 +472,27 @@ int main()
 
     while (1)
     {
-        TASK_BOUNDARY(TASK_MAIN, NULL);
-        DINO_RESTORE_NONE();
-
-        PRINTF("Hello world!\r\n");
-
+        run_mode_t mode = select_mode();
+        switch (mode) {
+            case MODE_TRAIN_STATIONARY:
+                LOG("mode: stationary\r\n");
+                train(model.stationary);
+                break;
+            case MODE_TRAIN_MOVING:
+                LOG("mode: moving\r\n");
+                train(model.moving);
+                break;
+            case MODE_RECOGNIZE:
+                LOG("mode: recognize\r\n");
+                recognize(&model);
+                break;
+            default:
 #ifdef CONT_POWER
-        volatile uint32_t delay = 0x8ffff;
-        while (delay--);
+                volatile uint32_t delay = 0x8ffff;
+                while (delay--);
 #endif // CONT_POWER
+                break;
+        }
     }
 
     return 0;
