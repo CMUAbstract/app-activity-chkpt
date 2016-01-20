@@ -525,10 +525,10 @@ int main()
     // globals correctly
     uint8_t prev_pin_state = MODE_IDLE;
 
-#ifdef MEMENTOS_NONVOLATILE
-    static __nv model_t model;
-#else
+#if defined(MEMENTOS) && !defined(MEMENTOS_NONVOLATILE)
     model_t model;
+#else
+    static __nv model_t model;
 #endif
 
 #ifndef MEMENTOS
