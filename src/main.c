@@ -9,6 +9,7 @@
 #include <libio/log.h>
 #include <msp-builtins.h>
 #include <msp-math.h>
+#include <wisp-base.h>
 
 #ifdef CONFIG_EDB
 #include <libedb/edb.h>
