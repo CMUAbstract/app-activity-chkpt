@@ -15,6 +15,10 @@ include $(MAKER_ROOT)/Makefile.board
 include $(MAKER_ROOT)/Makefile.console
 include $(MAKER_ROOT)/Makefile.edb
 
+# TODO: for some reason using the type threeAxis_t_8 crashes LLVM/Clang
+# NOTE: wisp-base lib must be compiled with same config
+CFLAGS += -DACCEL_16BIT_TYPE
+
 CFLAGS += \
 	-I$(LIBMSP_ROOT)/src/include \
 	-I$(LIBMSPMATH_ROOT)/src/include \
