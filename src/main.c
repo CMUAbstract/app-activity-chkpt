@@ -108,7 +108,17 @@ static __nv unsigned curtask;
 #define LED1 (1 << 0)
 #define LED2 (1 << 1)
 
+// TODO: for some reason using the type threeAxis_t_8 crashes LLVM/Clang
+#ifndef __clang__
+#define ACCEL_8BIT_TYPE
+#endif
+
+#ifdef ACCEL_8BIT_TYPE
 typedef threeAxis_t_8 accelReading;
+#else // !ACCEL_8BIT_TYPE
+typedef threeAxis_t accelReading;
+#endif // !ACCEL_8BIT_TYPE
+
 typedef accelReading accelWindow[ACCEL_WINDOW_SIZE];
 
 typedef struct {
@@ -461,7 +471,9 @@ run_mode_t select_mode(uint8_t *prev_pin_state)
 
 static void init_accel()
 {
+#ifdef ACCEL_8BIT_TYPE
     threeAxis_t_8 accelID = {0};
+#endif
 
     LOG("init: initializing accel\r\n");
 
@@ -488,9 +500,11 @@ static void init_accel()
     __delay_cycles(1000);
     ACCEL_initialize();
     __delay_cycles(1000);
+#ifdef ACCEL_8BIT_TYPE
     ACCEL_readID(&accelID);
 
     LOG("init: accel hw id: 0x%x\r\n", accelID.x);
+#endif
 }
 
 void init()
