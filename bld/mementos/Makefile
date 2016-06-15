@@ -9,6 +9,7 @@ CONFIG_PRINTF_LIB = libedb
 CONFIG_LIBEDB_PRINTF = eif
 
 MEMENTOS_MODE = timer+latch
+MEMENTOS_VARIANT ?= V
 
 include $(MAKER_ROOT)/Makefile.mementos
 include $(MAKER_ROOT)/Makefile.board
@@ -18,6 +19,12 @@ include $(MAKER_ROOT)/Makefile.edb
 # TODO: for some reason using the type threeAxis_t_8 crashes LLVM/Clang
 # NOTE: wisp-base lib must be compiled with same config
 CFLAGS += -DACCEL_16BIT_TYPE
+
+ifeq ($(MEMENTOS_VARIANT),NV)
+CFLAGS += -DMEMENTOS_NONVOLATILE
+else ifeq ($(MEMENTOS_VARIANT),V)
+# nothing to set, that's by default
+endif
 
 CFLAGS += \
 	-I$(LIBMSP_ROOT)/src/include \
