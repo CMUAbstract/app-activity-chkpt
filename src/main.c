@@ -108,17 +108,11 @@ static __nv unsigned curtask;
 #define LED1 (1 << 0)
 #define LED2 (1 << 1)
 
-// TODO: for some reason using the type threeAxis_t_8 crashes LLVM/Clang
-// NOTE: wisp-base lib must be compiled with same config
-#ifndef __clang__
-#define ACCEL_8BIT_TYPE
-#endif
-
-#ifdef ACCEL_8BIT_TYPE
-typedef threeAxis_t_8 accelReading;
-#else // !ACCEL_8BIT_TYPE
+#ifdef ACCEL_16BIT_TYPE
 typedef threeAxis_t accelReading;
-#endif // !ACCEL_8BIT_TYPE
+#else // !ACCEL_16BIT_TYPE
+typedef threeAxis_t_8 accelReading;
+#endif // !ACCEL_16BIT_TYPE
 
 typedef accelReading accelWindow[ACCEL_WINDOW_SIZE];
 
@@ -472,10 +466,10 @@ run_mode_t select_mode(uint8_t *prev_pin_state)
 
 static void init_accel()
 {
-#ifdef ACCEL_8BIT_TYPE
-    threeAxis_t_8 accelID = {0};
-#else
+#ifdef ACCEL_16BIT_TYPE
     threeAxis_t accelID = {0};
+#else
+    threeAxis_t_8 accelID = {0};
 #endif
 
     LOG("init: initializing accel\r\n");
