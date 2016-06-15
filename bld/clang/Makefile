@@ -3,9 +3,9 @@ EXEC = ar.out
 OBJECTS = \
 	main.o \
 
-BOARD = mspts430
-CONFIG_EDB = 0
-CONFIG_PRINTF_LIB = libmspconsole
+BOARD = wisp
+CONFIG_EDB = 1
+CONFIG_PRINTF_LIB = libedb
 CONFIG_LIBEDB_PRINTF = eif
 
 include $(MAKER_ROOT)/Makefile.clang
