@@ -1,0 +1,21 @@
+[submodule "ext/maker"]
+	path = ext/maker
+	url = https://github.com/CMUAbstract/maker
+[submodule "ext/libmsp"]
+	path = ext/libmsp
+	url = https://github.com/CMUAbstract/libmsp
+[submodule "ext/libio"]
+	path = ext/libio
+	url = https://github.com/CMUAbstract/libio
+[submodule "ext/libmspprintf"]
+	path = ext/libmspprintf
+	url = https://github.com/CMUAbstract/libmspprintf
+[submodule "ext/libadxl"]
+	path = ext/libadxl
+	url = https://github.com/CMUAbstract/libadxl.git
+[submodule "ext/libmspmath"]
+	path = ext/libmspmath
+	url = https://github.com/CMUAbstract/libmspmath.git
+[submodule "ext/libchain"]
+	path = ext/libchain
+	url = https://github.com/CMUAbstract/libchain.git

@@ -6,9 +6,12 @@
 #include <stdlib.h>
 
 #include <libmsp/mem.h>
-#include <libio/log.h>
-#include <msp-builtins.h>
-#include <msp-math.h>
+#include <libmsp/periph.h>
+#include <libmsp/gpio.h>
+#include <libmsp/watchdog.h>
+#include <libio/console.h>
+#include <libadxl/adxl362.h>
+#include <libmspmath/msp-math.h>
 
 #ifdef CONFIG_EDB
 #include <libedb/edb.h>
@@ -458,43 +461,10 @@ run_mode_t select_mode(uint8_t *prev_pin_state)
     return (run_mode_t)pin_state;
 }
 
-static void init_accel()
-{
-    threeAxis_t_8 accelID = {0};
-
-    LOG("init: initializing accel\r\n");
-
-    // AUX pins select run mode: configure as inputs with pull-ups
-    GPIO(PORT_AUX, DIR) &= ~(BIT(PIN_AUX_1) | BIT(PIN_AUX_2));
-    GPIO(PORT_AUX, OUT) &= ~(BIT(PIN_AUX_1) | BIT(PIN_AUX_2)); // pull-down
-    GPIO(PORT_AUX, REN) |= BIT(PIN_AUX_1) | BIT(PIN_AUX_2);
-
-    /*
-    SPI_initialize();
-    ACCEL_initialize();
-    */
-    // ACCEL_SetReg(0x2D,0x02);
-
-    /* TODO: move the below stuff to accel.c */
-    BITSET(P4OUT, PIN_ACCEL_EN);
-
-    BITSET(P2SEL1, PIN_ACCEL_SCLK | PIN_ACCEL_MISO | PIN_ACCEL_MOSI);
-    BITCLR(P2SEL0, PIN_ACCEL_SCLK | PIN_ACCEL_MISO | PIN_ACCEL_MOSI);
-    __delay_cycles(1000);
-    SPI_initialize();
-    __delay_cycles(1000);
-    ACCEL_range();
-    __delay_cycles(1000);
-    ACCEL_initialize();
-    __delay_cycles(1000);
-    ACCEL_readID(&accelID);
-
-    LOG("init: accel hw id: 0x%x\r\n", accelID.x);
-}
-
 void init()
 {
-    WISP_init();
+    msp_watchdog_disable();
+    msp_gpio_unlock();
 
 #ifdef CONFIG_EDB
     debug_setup();
@@ -514,7 +484,12 @@ void init()
     GPIO(PORT_LED_3, OUT) |= BIT(PIN_LED_3);
 #endif
 
-    init_accel();
+    // AUX pins select run mode: configure as inputs with pull-ups
+    GPIO(PORT_AUX, DIR) &= ~(BIT(PIN_AUX_1) | BIT(PIN_AUX_2));
+    GPIO(PORT_AUX, OUT) &= ~(BIT(PIN_AUX_1) | BIT(PIN_AUX_2)); // pull-down
+    GPIO(PORT_AUX, REN) |= BIT(PIN_AUX_1) | BIT(PIN_AUX_2);
+
+    ACCEL_init();
 
     PRINTF(".%u.\r\n", curtask);
 }
