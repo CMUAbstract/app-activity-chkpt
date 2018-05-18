@@ -19,3 +19,6 @@
 [submodule "ext/libchain"]
 	path = ext/libchain
 	url = https://github.com/CMUAbstract/libchain.git
+[submodule "ext/libmspbuiltins"]
+	path = ext/libmspbuiltins
+	url = https://github.com/CMUAbstract/libmspbuiltins

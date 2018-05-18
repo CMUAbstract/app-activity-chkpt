@@ -4,11 +4,14 @@ OBJECTS = \
 	main.o \
 
 DEPS += \
-	libchain \
 	libadxl \
 	libmspmath \
 	libio \
 	libmsp \
+
+ifeq ($(TOOLCHAIN),clang)
+DEPS += libmspbuiltins:gcc
+endif
 
 CONFIG_EDB ?= 0
 
@@ -21,9 +24,10 @@ export CLOCK_FREQ_MCLK = $(MAIN_CLOCK_FREQ)
 export LIBMSP_CLOCK_SOURCE = DCO
 export LIBMSP_DCO_FREQ = $(MAIN_CLOCK_FREQ)
 
-export LIBMSP_SLEEP_TIMER = B.0.0
-export LIBMSP_SLEEP_TIMER_CLK = ACLK
-export LIBMSP_SLEEP_TIMER_DIV = 8*1
+# Not supported by Clang
+#export LIBMSP_SLEEP_TIMER = B.0.0
+#export LIBMSP_SLEEP_TIMER_CLK = ACLK
+#export LIBMSP_SLEEP_TIMER_DIV = 8*1
 
 # To use add: libmspsoftuart to DEPS
 #export LIBIO_BACKEND = swuart
@@ -36,8 +40,9 @@ export LIBMSP_SLEEP_TIMER_DIV = 8*1
 #export LIBMSPSOFTUART_CLOCK_FREQ = $(MAIN_CLOCK_FREQ)
 #export LIBMSPSOFTUART_TIMER = B.0.5
 
-export LIBIO_BACKEND = hwuart
-export LIBMSP_UART_IDX = 0
-export LIBMSP_UART_PIN_TX = 2.0
-export LIBMSP_UART_BAUDRATE = 115200
-export LIBMSP_UART_CLOCK = SMCLK
+# Not supported by Clang
+#export LIBIO_BACKEND = hwuart
+#export LIBMSP_UART_IDX = 0
+#export LIBMSP_UART_PIN_TX = 2.0
+#export LIBMSP_UART_BAUDRATE = 115200
+#export LIBMSP_UART_CLOCK = SMCLK
